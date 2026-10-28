@@ -8,7 +8,7 @@ A lightweight Rust CLI for detecting configuration drift without exposing secret
 - JSON (`.json`)
 - TOML (`.toml`)
 
-Reports contain diagnostic codes, severities, configuration paths, source filenames, and source locations when available. Configuration values are never included in text or JSON reports.
+Reports contain diagnostic codes, severities, configuration paths, source filenames, and source locations when available. Configuration values are never included in text or JSON reports. Empty nested objects, tables, and arrays are retained during normalization so structural comparisons do not silently discard them. Control characters in displayed paths are escaped to keep terminal output on one line and prevent terminal-control injection.
 
 ## Commands
 

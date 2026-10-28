@@ -42,14 +42,14 @@ impl ComparisonReport {
     pub fn new(mut diagnostics: Vec<Diagnostic>) -> Self {
         diagnostics.sort_by(|left, right| {
             (
-                left.path().map(ToString::to_string),
+                left.path(),
                 left.code(),
                 left.severity(),
                 left.source_name(),
                 left.location(),
             )
                 .cmp(&(
-                    right.path().map(ToString::to_string),
+                    right.path(),
                     right.code(),
                     right.severity(),
                     right.source_name(),
@@ -95,7 +95,7 @@ pub fn compare_documents(
     add_duplicate_diagnostics(target, &target_index, &mut diagnostics);
 
     for (path, entries) in &reference_index {
-        if entries.len() == 1 && !target_index.contains_key(path) {
+        if !target_index.contains_key(path) {
             diagnostics.push(diagnostic_for(
                 DiagnosticCode::MissingKey,
                 Severity::Error,
@@ -108,7 +108,7 @@ pub fn compare_documents(
 
     if options.report_unexpected_keys {
         for (path, entries) in &target_index {
-            if entries.len() == 1 && !reference_index.contains_key(path) {
+            if !reference_index.contains_key(path) {
                 diagnostics.push(diagnostic_for(
                     DiagnosticCode::UnexpectedKey,
                     Severity::Warning,
@@ -290,6 +290,24 @@ mod tests {
                 .count(),
             2
         );
+    }
+
+    #[test]
+    fn reports_missing_and_unexpected_paths_even_when_the_path_is_duplicated() {
+        let reference = document(vec![entry("MISSING", "1"), entry("MISSING", "2")]);
+        let target = document(vec![entry("EXTRA", "1"), entry("EXTRA", "2")]);
+
+        let report = compare_documents(&reference, &target, ComparisonOptions::default());
+        let diagnostics = report.diagnostics();
+
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic.code() == DiagnosticCode::MissingKey
+                && diagnostic.path().unwrap().to_string() == "MISSING"
+        }));
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic.code() == DiagnosticCode::UnexpectedKey
+                && diagnostic.path().unwrap().to_string() == "EXTRA"
+        }));
     }
 
     #[test]

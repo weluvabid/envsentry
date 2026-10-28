@@ -154,11 +154,23 @@ pub fn parse_json(input: &str) -> Result<ConfigDocument, JsonParseError> {
 fn flatten(node: Node, path: &ConfigPath, entries: &mut Vec<ConfigEntry>) {
     match node {
         Node::Object(fields) => {
+            if fields.is_empty() {
+                if !path.is_root() {
+                    push_value(path, "{}", ValueKind::Object, entries);
+                }
+                return;
+            }
             for (key, value) in fields {
                 flatten(value, &path.child_key(key), entries);
             }
         }
         Node::Array(values) => {
+            if values.is_empty() {
+                if !path.is_root() {
+                    push_value(path, "[]", ValueKind::Array, entries);
+                }
+                return;
+            }
             for (index, value) in values.into_iter().enumerate() {
                 flatten(value, &path.child_index(index), entries);
             }
@@ -171,12 +183,16 @@ fn flatten(node: Node, path: &ConfigPath, entries: &mut Vec<ConfigEntry>) {
                 Node::String(value) => (value, ValueKind::String),
                 Node::Array(_) | Node::Object(_) => unreachable!(),
             };
-            entries.push(
-                ConfigEntry::new(path.clone(), ConfigValue::new(raw, kind))
-                    .with_sensitivity(Sensitivity::Unknown),
-            );
+            push_value(path, &raw, kind, entries);
         }
     }
+}
+
+fn push_value(path: &ConfigPath, raw: &str, kind: ValueKind, entries: &mut Vec<ConfigEntry>) {
+    entries.push(
+        ConfigEntry::new(path.clone(), ConfigValue::new(raw, kind))
+            .with_sensitivity(Sensitivity::Unknown),
+    );
 }
 
 #[cfg(test)]
@@ -216,6 +232,20 @@ mod tests {
 
         assert_eq!(error, "invalid JSON configuration");
         assert!(!error.contains("SENSITIVE_SENTINEL"));
+    }
+
+    #[test]
+    fn preserves_nested_empty_objects_and_arrays() {
+        let document = parse_json(r#"{"object":{},"array":[],"items":[{}]}"#).unwrap();
+        let entries: Vec<_> = document
+            .entries()
+            .iter()
+            .map(|entry| (entry.path().to_string(), entry.value().kind()))
+            .collect();
+
+        assert!(entries.contains(&("object".to_owned(), ValueKind::Object)));
+        assert!(entries.contains(&("array".to_owned(), ValueKind::Array)));
+        assert!(entries.contains(&("items[0]".to_owned(), ValueKind::Object)));
     }
 
     #[test]

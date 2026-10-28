@@ -27,11 +27,23 @@ pub fn parse_toml(input: &str) -> Result<ConfigDocument, TomlParseError> {
 fn flatten(value: toml::Value, path: &ConfigPath, entries: &mut Vec<ConfigEntry>) {
     match value {
         toml::Value::Table(table) => {
+            if table.is_empty() {
+                if !path.is_root() {
+                    push_value(path, "{}", ValueKind::Object, entries);
+                }
+                return;
+            }
             for (key, value) in table {
                 flatten(value, &path.child_key(key), entries);
             }
         }
         toml::Value::Array(values) => {
+            if values.is_empty() {
+                if !path.is_root() {
+                    push_value(path, "[]", ValueKind::Array, entries);
+                }
+                return;
+            }
             for (index, value) in values.into_iter().enumerate() {
                 flatten(value, &path.child_index(index), entries);
             }
@@ -45,12 +57,16 @@ fn flatten(value: toml::Value, path: &ConfigPath, entries: &mut Vec<ConfigEntry>
                 toml::Value::Datetime(value) => (value.to_string(), ValueKind::DateTime),
                 toml::Value::Array(_) | toml::Value::Table(_) => unreachable!(),
             };
-            entries.push(
-                ConfigEntry::new(path.clone(), ConfigValue::new(raw, kind))
-                    .with_sensitivity(Sensitivity::Unknown),
-            );
+            push_value(path, &raw, kind, entries);
         }
     }
+}
+
+fn push_value(path: &ConfigPath, raw: &str, kind: ValueKind, entries: &mut Vec<ConfigEntry>) {
+    entries.push(
+        ConfigEntry::new(path.clone(), ConfigValue::new(raw, kind))
+            .with_sensitivity(Sensitivity::Unknown),
+    );
 }
 
 #[cfg(test)]
@@ -86,6 +102,18 @@ mod tests {
                 .kind(),
             ValueKind::Integer
         );
+    }
+
+    #[test]
+    fn preserves_nested_empty_tables_and_arrays() {
+        let document = parse_toml("[empty_table]\n\n[settings]\nitems = []\n").unwrap();
+
+        assert!(document.entries().iter().any(|entry| {
+            entry.path().to_string() == "empty_table" && entry.value().kind() == ValueKind::Object
+        }));
+        assert!(document.entries().iter().any(|entry| {
+            entry.path().to_string() == "settings.items" && entry.value().kind() == ValueKind::Array
+        }));
     }
 
     #[test]

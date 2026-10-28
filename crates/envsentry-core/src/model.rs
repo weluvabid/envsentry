@@ -63,8 +63,12 @@ impl fmt::Display for ConfigPath {
                     for character in key.chars() {
                         if matches!(character, '.' | '\\') {
                             f.write_str("\\")?;
+                            write!(f, "{character}")?;
+                        } else if character.is_control() {
+                            write!(f, "{}", character.escape_default())?;
+                        } else {
+                            write!(f, "{character}")?;
                         }
-                        write!(f, "{character}")?;
                     }
                     first_key = false;
                 }
@@ -285,6 +289,15 @@ mod tests {
             .child_key("api.url");
 
         assert_eq!(path.to_string(), "services[1].api\\.url");
+    }
+
+    #[test]
+    fn config_path_escapes_control_characters() {
+        let path = ConfigPath::key("API\nKEY").child_key("ESC\u{1b}APE");
+
+        assert_eq!(path.to_string(), "API\\nKEY.ESC\\u{1b}APE");
+        assert!(!path.to_string().contains('\n'));
+        assert!(!path.to_string().contains('\u{1b}'));
     }
 
     #[test]

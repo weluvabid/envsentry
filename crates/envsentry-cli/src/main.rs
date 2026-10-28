@@ -99,25 +99,23 @@ fn run(cli: Cli) -> Result<u8, String> {
 
 fn load_document(path: &Path) -> Result<envsentry_core::ConfigDocument, String> {
     let input = std::fs::read_to_string(path)
-        .map_err(|_| format!("cannot read input file '{}'", path.display()))?;
+        .map_err(|_| format!("cannot read input file '{}'", escaped_path(path)))?;
     let format = infer_format(path).ok_or_else(|| {
         format!(
             "unsupported file format for '{}'; expected .env, .json, or .toml",
-            path.display()
+            escaped_path(path)
         )
     })?;
 
-    let document = match format {
-        InputFormat::Dotenv => {
-            parse_dotenv(&input).map_err(|error| format!("{} in '{}'", error, path.display()))?
-        }
-        InputFormat::Json => {
-            parse_json(&input).map_err(|error| format!("{} in '{}'", error, path.display()))?
-        }
-        InputFormat::Toml => {
-            parse_toml(&input).map_err(|error| format!("{} in '{}'", error, path.display()))?
-        }
-    };
+    let document =
+        match format {
+            InputFormat::Dotenv => parse_dotenv(&input)
+                .map_err(|error| format!("{} in '{}'", error, escaped_path(path)))?,
+            InputFormat::Json => parse_json(&input)
+                .map_err(|error| format!("{} in '{}'", error, escaped_path(path)))?,
+            InputFormat::Toml => parse_toml(&input)
+                .map_err(|error| format!("{} in '{}'", error, escaped_path(path)))?,
+        };
 
     Ok(document.with_source_name(path.to_string_lossy().into_owned()))
 }
@@ -202,6 +200,7 @@ fn render_diagnostic(
         write!(output, ": {path}")?;
     }
     if let Some(source) = diagnostic.source_name() {
+        let source = escape_controls(source);
         write!(output, " ({source}")?;
         if let Some(location) = diagnostic.location() {
             write!(output, ":{}:{}", location.line(), location.column())?;
@@ -209,6 +208,23 @@ fn render_diagnostic(
         write!(output, ")")?;
     }
     writeln!(output)
+}
+
+fn escaped_path(path: &Path) -> String {
+    escape_controls(&path.to_string_lossy())
+}
+
+fn escape_controls(value: &str) -> String {
+    value
+        .chars()
+        .map(|character| {
+            if character.is_control() {
+                character.escape_default().to_string()
+            } else {
+                character.to_string()
+            }
+        })
+        .collect()
 }
 
 fn render_json(output: &mut impl Write, report: &ComparisonReport) -> io::Result<()> {
@@ -292,6 +308,16 @@ mod tests {
             Some(InputFormat::Toml)
         ));
         assert!(infer_format(Path::new("settings.yaml")).is_none());
+    }
+
+    #[test]
+    fn text_escaping_prevents_control_characters_in_source_names() {
+        assert_eq!(
+            escape_controls("config\n\u{1b}[31m"),
+            "config\\n\\u{1b}[31m"
+        );
+        assert!(!escape_controls("config\n\u{1b}[31m").contains('\n'));
+        assert!(!escape_controls("config\n\u{1b}[31m").contains('\u{1b}'));
     }
 
     #[test]
