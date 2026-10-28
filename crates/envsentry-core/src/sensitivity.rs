@@ -35,14 +35,12 @@ impl SensitivityPolicy {
     }
 
     pub fn with_sensitive_pattern(mut self, pattern: impl Into<String>) -> Self {
-        self.sensitive_patterns
-            .push(pattern.into().to_ascii_uppercase());
+        self.sensitive_patterns.push(pattern.into().to_ascii_uppercase());
         self
     }
 
     pub fn with_public_pattern(mut self, pattern: impl Into<String>) -> Self {
-        self.public_patterns
-            .push(pattern.into().to_ascii_uppercase());
+        self.public_patterns.push(pattern.into().to_ascii_uppercase());
         self
     }
 
@@ -97,9 +95,7 @@ fn path_key(path: &ConfigPath) -> String {
 }
 
 fn matches_any(value: &str, patterns: &[String]) -> bool {
-    patterns
-        .iter()
-        .any(|pattern| wildcard_match(pattern, value))
+    patterns.iter().any(|pattern| wildcard_match(pattern, value))
 }
 
 fn wildcard_match(pattern: &str, value: &str) -> bool {
@@ -136,28 +132,16 @@ mod tests {
     fn classifies_common_sensitive_names_case_insensitively() {
         let policy = SensitivityPolicy::default();
 
-        assert_eq!(
-            policy.classify_path(&ConfigPath::key("database_url")),
-            Sensitivity::Sensitive
-        );
-        assert_eq!(
-            policy.classify_path(&ConfigPath::key("SERVICE_TOKEN")),
-            Sensitivity::Sensitive
-        );
-        assert_eq!(
-            policy.classify_path(&ConfigPath::key("LOG_LEVEL")),
-            Sensitivity::Unknown
-        );
+        assert_eq!(policy.classify_path(&ConfigPath::key("database_url")), Sensitivity::Sensitive);
+        assert_eq!(policy.classify_path(&ConfigPath::key("SERVICE_TOKEN")), Sensitivity::Sensitive);
+        assert_eq!(policy.classify_path(&ConfigPath::key("LOG_LEVEL")), Sensitivity::Unknown);
     }
 
     #[test]
     fn explicit_public_patterns_take_precedence_over_defaults() {
         let policy = SensitivityPolicy::default().with_public_pattern("PUBLIC_*");
 
-        assert_eq!(
-            policy.classify_path(&ConfigPath::key("PUBLIC_API_KEY")),
-            Sensitivity::Public
-        );
+        assert_eq!(policy.classify_path(&ConfigPath::key("PUBLIC_API_KEY")), Sensitivity::Public);
     }
 
     #[test]
@@ -181,10 +165,7 @@ mod tests {
         )
         .with_sensitivity(Sensitivity::Public);
 
-        assert_eq!(
-            policy.classify_path(&ConfigPath::key("LOG_LEVEL")),
-            Sensitivity::Sensitive
-        );
+        assert_eq!(policy.classify_path(&ConfigPath::key("LOG_LEVEL")), Sensitivity::Sensitive);
         assert_eq!(policy.classify_entry(&entry), Sensitivity::Sensitive);
     }
 }

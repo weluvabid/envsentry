@@ -10,10 +10,7 @@ pub struct ComparisonOptions {
 
 impl Default for ComparisonOptions {
     fn default() -> Self {
-        Self {
-            compare_values: true,
-            report_unexpected_keys: true,
-        }
+        Self { compare_values: true, report_unexpected_keys: true }
     }
 }
 
@@ -41,20 +38,13 @@ pub struct ComparisonReport {
 impl ComparisonReport {
     pub fn new(mut diagnostics: Vec<Diagnostic>) -> Self {
         diagnostics.sort_by(|left, right| {
-            (
-                left.path(),
-                left.code(),
-                left.severity(),
-                left.source_name(),
-                left.location(),
-            )
-                .cmp(&(
-                    right.path(),
-                    right.code(),
-                    right.severity(),
-                    right.source_name(),
-                    right.location(),
-                ))
+            (left.path(), left.code(), left.severity(), left.source_name(), left.location()).cmp(&(
+                right.path(),
+                right.code(),
+                right.severity(),
+                right.source_name(),
+                right.location(),
+            ))
         });
         Self { diagnostics }
     }
@@ -64,15 +54,11 @@ impl ComparisonReport {
     }
 
     pub fn has_errors(&self) -> bool {
-        self.diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.severity() == Severity::Error)
+        self.diagnostics.iter().any(|diagnostic| diagnostic.severity() == Severity::Error)
     }
 
     pub fn has_warnings(&self) -> bool {
-        self.diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.severity() == Severity::Warning)
+        self.diagnostics.iter().any(|diagnostic| diagnostic.severity() == Severity::Warning)
     }
 
     pub fn is_clean(&self) -> bool {
@@ -166,10 +152,7 @@ pub fn compare_documents(
 fn index_entries(entries: &[ConfigEntry]) -> BTreeMap<ConfigPath, Vec<&ConfigEntry>> {
     let mut index = BTreeMap::new();
     for entry in entries {
-        index
-            .entry(entry.path().clone())
-            .or_insert_with(Vec::new)
-            .push(entry);
+        index.entry(entry.path().clone()).or_insert_with(Vec::new).push(entry);
     }
     index
 }
@@ -246,10 +229,7 @@ mod tests {
     use crate::{ConfigEntry, ConfigFormat, ConfigValue, ValueKind};
 
     fn entry(key: &str, value: &str) -> ConfigEntry {
-        ConfigEntry::new(
-            ConfigPath::key(key),
-            ConfigValue::new(value, ValueKind::String),
-        )
+        ConfigEntry::new(ConfigPath::key(key), ConfigValue::new(value, ValueKind::String))
     }
 
     fn document(entries: Vec<ConfigEntry>) -> ConfigDocument {
@@ -262,10 +242,7 @@ mod tests {
 
     #[test]
     fn detects_missing_unexpected_and_mismatched_values() {
-        let reference = document(vec![
-            entry("PORT", "3000"),
-            entry("DATABASE_URL", "secret-a"),
-        ]);
+        let reference = document(vec![entry("PORT", "3000"), entry("DATABASE_URL", "secret-a")]);
         let target = document(vec![entry("PORT", "4000"), entry("EXTRA", "value")]);
 
         let report = compare_documents(&reference, &target, ComparisonOptions::default());
@@ -332,11 +309,8 @@ mod tests {
         let reference = document(vec![entry("PORT", "3000")]);
         let target = document(vec![entry("PORT", "4000")]);
 
-        let report = compare_documents(
-            &reference,
-            &target,
-            ComparisonOptions::new().compare_values(false),
-        );
+        let report =
+            compare_documents(&reference, &target, ComparisonOptions::new().compare_values(false));
 
         assert!(report.is_clean());
     }

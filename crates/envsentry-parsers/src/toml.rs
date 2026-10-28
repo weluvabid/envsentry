@@ -83,11 +83,8 @@ mod tests {
         )
         .unwrap();
 
-        let paths: Vec<_> = document
-            .entries()
-            .iter()
-            .map(|entry| entry.path().to_string())
-            .collect();
+        let paths: Vec<_> =
+            document.entries().iter().map(|entry| entry.path().to_string()).collect();
 
         assert!(paths.contains(&"database.port".to_owned()));
         assert!(paths.contains(&"database.enabled".to_owned()));
@@ -124,9 +121,7 @@ mod tests {
 
     #[test]
     fn parse_errors_do_not_echo_secret_values() {
-        let error = parse_toml("password = [\"SENSITIVE_SENTINEL\"")
-            .unwrap_err()
-            .to_string();
+        let error = parse_toml("password = [\"SENSITIVE_SENTINEL\"").unwrap_err().to_string();
 
         assert_eq!(error, "invalid TOML configuration");
         assert!(!error.contains("SENSITIVE_SENTINEL"));

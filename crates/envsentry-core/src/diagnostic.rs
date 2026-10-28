@@ -50,13 +50,7 @@ pub struct Diagnostic {
 
 impl Diagnostic {
     pub fn new(code: DiagnosticCode, severity: Severity) -> Self {
-        Self {
-            code,
-            severity,
-            path: None,
-            source_name: None,
-            location: None,
-        }
+        Self { code, severity, path: None, source_name: None, location: None }
     }
 
     pub fn with_path(mut self, path: ConfigPath) -> Self {

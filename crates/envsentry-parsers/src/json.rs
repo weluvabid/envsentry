@@ -202,11 +202,8 @@ mod tests {
     #[test]
     fn flattens_nested_objects_and_arrays() {
         let document = parse_json(r#"{"database":{"port":5432},"nodes":[true,null]}"#).unwrap();
-        let paths: Vec<_> = document
-            .entries()
-            .iter()
-            .map(|entry| entry.path().to_string())
-            .collect();
+        let paths: Vec<_> =
+            document.entries().iter().map(|entry| entry.path().to_string()).collect();
 
         assert_eq!(paths, ["database.port", "nodes[0]", "nodes[1]"]);
         assert_eq!(document.entries()[0].value().kind(), ValueKind::Integer);
@@ -226,9 +223,7 @@ mod tests {
 
     #[test]
     fn parse_errors_do_not_echo_secret_values() {
-        let error = parse_json(r#"{"password":"SENSITIVE_SENTINEL",}"#)
-            .unwrap_err()
-            .to_string();
+        let error = parse_json(r#"{"password":"SENSITIVE_SENTINEL",}"#).unwrap_err().to_string();
 
         assert_eq!(error, "invalid JSON configuration");
         assert!(!error.contains("SENSITIVE_SENTINEL"));

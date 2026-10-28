@@ -295,27 +295,15 @@ mod tests {
 
     #[test]
     fn infers_supported_formats_case_insensitively() {
-        assert!(matches!(
-            infer_format(Path::new(".env.production")),
-            Some(InputFormat::Dotenv)
-        ));
-        assert!(matches!(
-            infer_format(Path::new("settings.JSON")),
-            Some(InputFormat::Json)
-        ));
-        assert!(matches!(
-            infer_format(Path::new("settings.TOML")),
-            Some(InputFormat::Toml)
-        ));
+        assert!(matches!(infer_format(Path::new(".env.production")), Some(InputFormat::Dotenv)));
+        assert!(matches!(infer_format(Path::new("settings.JSON")), Some(InputFormat::Json)));
+        assert!(matches!(infer_format(Path::new("settings.TOML")), Some(InputFormat::Toml)));
         assert!(infer_format(Path::new("settings.yaml")).is_none());
     }
 
     #[test]
     fn text_escaping_prevents_control_characters_in_source_names() {
-        assert_eq!(
-            escape_controls("config\n\u{1b}[31m"),
-            "config\\n\\u{1b}[31m"
-        );
+        assert_eq!(escape_controls("config\n\u{1b}[31m"), "config\\n\\u{1b}[31m");
         assert!(!escape_controls("config\n\u{1b}[31m").contains('\n'));
         assert!(!escape_controls("config\n\u{1b}[31m").contains('\u{1b}'));
     }

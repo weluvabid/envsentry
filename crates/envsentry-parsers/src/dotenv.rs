@@ -33,12 +33,9 @@ pub fn parse_dotenv(input: &str) -> Result<ConfigDocument, DotenvParseError> {
         *occurrence += 1;
 
         entries.push(
-            ConfigEntry::new(
-                ConfigPath::key(key),
-                ConfigValue::new(value, ValueKind::String),
-            )
-            .with_sensitivity(Sensitivity::Unknown)
-            .with_occurrence(*occurrence),
+            ConfigEntry::new(ConfigPath::key(key), ConfigValue::new(value, ValueKind::String))
+                .with_sensitivity(Sensitivity::Unknown)
+                .with_occurrence(*occurrence),
         );
     }
 

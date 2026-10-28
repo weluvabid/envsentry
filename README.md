@@ -46,10 +46,17 @@ Missing and duplicate keys are errors. Unexpected keys, empty values, and value/
 
 `--redact-all` is accepted for policy compatibility; current reports never emit configuration values regardless of this option.
 
-## Build and test
+## Development checks
+
+Run the same formatting, lint, and test checks used by CI:
 
 ```sh
-cargo build --workspace
-cargo test --workspace
-cargo run -p envsentry-cli -- --help
+./scripts/check.sh
+```
+
+Build the workspace or inspect the CLI help:
+
+```sh
+cargo build --workspace --locked
+cargo run --locked -p envsentry-cli -- --help
 ```

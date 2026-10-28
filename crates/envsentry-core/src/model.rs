@@ -61,7 +61,7 @@ impl fmt::Display for ConfigPath {
                         f.write_str(".")?;
                     }
                     for character in key.chars() {
-                        if matches!(character, '.' | '\\') {
+                        if matches!(character, '.' | '\\' | '[' | ']') {
                             f.write_str("\\")?;
                             write!(f, "{character}")?;
                         } else if character.is_control() {
@@ -101,10 +101,7 @@ pub struct ConfigValue {
 
 impl ConfigValue {
     pub fn new(raw: impl Into<String>, kind: ValueKind) -> Self {
-        Self {
-            raw: raw.into(),
-            kind,
-        }
+        Self { raw: raw.into(), kind }
     }
 
     pub fn as_str(&self) -> &str {
@@ -126,10 +123,7 @@ impl ConfigValue {
 
 impl fmt::Debug for ConfigValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ConfigValue")
-            .field("raw", &"[REDACTED]")
-            .field("kind", &self.kind)
-            .finish()
+        f.debug_struct("ConfigValue").field("raw", &"[REDACTED]").field("kind", &self.kind).finish()
     }
 }
 
@@ -175,13 +169,7 @@ pub struct ConfigEntry {
 
 impl ConfigEntry {
     pub fn new(path: ConfigPath, value: ConfigValue) -> Self {
-        Self {
-            path,
-            value,
-            sensitivity: Sensitivity::Unknown,
-            source: None,
-            occurrence: 1,
-        }
+        Self { path, value, sensitivity: Sensitivity::Unknown, source: None, occurrence: 1 }
     }
 
     pub fn with_sensitivity(mut self, sensitivity: Sensitivity) -> Self {
@@ -229,11 +217,7 @@ pub struct ConfigDocument {
 
 impl ConfigDocument {
     pub fn new(format: ConfigFormat, entries: Vec<ConfigEntry>) -> Self {
-        Self {
-            format,
-            source_name: None,
-            entries,
-        }
+        Self { format, source_name: None, entries }
     }
 
     pub fn with_source_name(mut self, source_name: impl Into<String>) -> Self {
@@ -284,9 +268,7 @@ mod tests {
 
     #[test]
     fn config_path_formats_nested_keys_and_indices() {
-        let path = ConfigPath::key("services")
-            .child_index(1)
-            .child_key("api.url");
+        let path = ConfigPath::key("services").child_index(1).child_key("api.url");
 
         assert_eq!(path.to_string(), "services[1].api\\.url");
     }
@@ -301,6 +283,16 @@ mod tests {
     }
 
     #[test]
+    fn config_path_escapes_array_delimiters_in_keys() {
+        let key_path = ConfigPath::key("items[0]");
+        let index_path = ConfigPath::key("items").child_index(0);
+
+        assert_eq!(key_path.to_string(), "items\\[0\\]");
+        assert_eq!(index_path.to_string(), "items[0]");
+        assert_ne!(key_path.to_string(), index_path.to_string());
+    }
+
+    #[test]
     fn source_locations_reject_zero_coordinates() {
         assert!(SourceLocation::new(0, 1).is_none());
         assert!(SourceLocation::new(1, 0).is_none());
@@ -309,16 +301,12 @@ mod tests {
 
     #[test]
     fn document_keeps_duplicate_entries_in_order() {
-        let first = ConfigEntry::new(
-            ConfigPath::key("PORT"),
-            ConfigValue::new("3000", ValueKind::String),
-        )
-        .with_occurrence(1);
-        let second = ConfigEntry::new(
-            ConfigPath::key("PORT"),
-            ConfigValue::new("4000", ValueKind::String),
-        )
-        .with_occurrence(2);
+        let first =
+            ConfigEntry::new(ConfigPath::key("PORT"), ConfigValue::new("3000", ValueKind::String))
+                .with_occurrence(1);
+        let second =
+            ConfigEntry::new(ConfigPath::key("PORT"), ConfigValue::new("4000", ValueKind::String))
+                .with_occurrence(2);
         let document = ConfigDocument::new(ConfigFormat::Dotenv, vec![first, second]);
 
         assert_eq!(document.entries().len(), 2);

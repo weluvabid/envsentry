@@ -31,10 +31,7 @@ impl Drop for TempDir {
 }
 
 fn run(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_envsentry"))
-        .args(args)
-        .output()
-        .unwrap()
+    Command::new(env!("CARGO_BIN_EXE_envsentry")).args(args).output().unwrap()
 }
 
 #[test]
