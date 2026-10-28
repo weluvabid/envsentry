@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 envsentry-core = { path = "../envsentry-core" }
+dotenvy = { workspace = true }
 
 [lints]
 workspace = true
