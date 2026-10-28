@@ -111,6 +111,7 @@ dependencies = [
  "clap",
  "envsentry-core",
  "envsentry-parsers",
+ "serde_json",
 ]
 
 [[package]]

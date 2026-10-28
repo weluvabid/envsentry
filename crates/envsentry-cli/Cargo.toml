@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 clap = { workspace = true }
+serde_json = { workspace = true }
 envsentry-core = { path = "../envsentry-core" }
 envsentry-parsers = { path = "../envsentry-parsers" }
 
