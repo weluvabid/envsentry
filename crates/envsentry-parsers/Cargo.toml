@@ -1,0 +1,10 @@
+[package]
+name = "envsentry-parsers"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+envsentry-core = { path = "../envsentry-core" }
+
+[lints]
+workspace = true

@@ -1,0 +1,16 @@
+[package]
+name = "envsentry-cli"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+clap = { workspace = true }
+envsentry-core = { path = "../envsentry-core" }
+envsentry-parsers = { path = "../envsentry-parsers" }
+
+[[bin]]
+name = "envsentry"
+path = "src/main.rs"
+
+[lints]
+workspace = true
