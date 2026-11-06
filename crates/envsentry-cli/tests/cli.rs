@@ -107,3 +107,12 @@ fn parse_errors_return_two_without_echoing_configuration_values() {
     assert!(stderr.contains("invalid JSON configuration"));
     assert!(!stderr.contains("PARSE_SECRET_SENTINEL"));
 }
+
+#[test]
+fn removed_redact_all_flag_is_not_accepted() {
+    let output = run(&["--redact-all", "--help"]);
+
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(stderr.contains("unexpected argument '--redact-all'"));
+}

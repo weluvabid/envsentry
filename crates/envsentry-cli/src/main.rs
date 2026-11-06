@@ -22,13 +22,6 @@ struct Cli {
     #[arg(long, global = true, help = "Treat warnings as policy failures")]
     strict: bool,
 
-    #[arg(
-        long,
-        global = true,
-        help = "Enable redact-all policy (reports currently never include values)"
-    )]
-    redact_all: bool,
-
     #[arg(long, global = true, help = "Disable colored terminal output")]
     no_color: bool,
 
@@ -93,7 +86,6 @@ fn run(cli: Cli) -> Result<u8, String> {
     .map_err(|_| "failed to write report".to_owned())?;
 
     let failed = report.has_errors() || (cli.strict && report.has_warnings());
-    let _redact_all = cli.redact_all;
     Ok(if failed { 1 } else { 0 })
 }
 

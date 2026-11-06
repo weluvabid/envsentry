@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "Rust's Cargo is required to run the pre-commit checks; install the project's Rust toolchain and retry." >&2
+  exit 1
+fi
+
+if [ ! -x ./scripts/check.sh ]; then
+  echo "scripts/check.sh is missing or not executable; cannot run the mandatory pre-commit checks." >&2
+  exit 1
+fi
+
+echo "Running mandatory pre-commit checks: ./scripts/check.sh"
+./scripts/check.sh
