@@ -145,6 +145,10 @@ impl<'de> Deserialize<'de> for Node {
 /// preserved as repeated entries so the comparison engine can diagnose them.
 pub fn parse_json(input: &str) -> Result<ConfigDocument, JsonParseError> {
     let node = serde_json::from_str::<Node>(input).map_err(|_| JsonParseError)?;
+    if !matches!(&node, Node::Object(_)) {
+        return Err(JsonParseError);
+    }
+
     let mut entries = Vec::new();
     flatten(node, &ConfigPath::root(), &mut entries);
 
@@ -154,22 +158,16 @@ pub fn parse_json(input: &str) -> Result<ConfigDocument, JsonParseError> {
 fn flatten(node: Node, path: &ConfigPath, entries: &mut Vec<ConfigEntry>) {
     match node {
         Node::Object(fields) => {
-            if fields.is_empty() {
-                if !path.is_root() {
-                    push_value(path, "{}", ValueKind::Object, entries);
-                }
-                return;
+            if !path.is_root() {
+                push_value(path, "{}", ValueKind::Object, entries);
             }
             for (key, value) in fields {
                 flatten(value, &path.child_key(key), entries);
             }
         }
         Node::Array(values) => {
-            if values.is_empty() {
-                if !path.is_root() {
-                    push_value(path, "[]", ValueKind::Array, entries);
-                }
-                return;
+            if !path.is_root() {
+                push_value(path, "[]", ValueKind::Array, entries);
             }
             for (index, value) in values.into_iter().enumerate() {
                 flatten(value, &path.child_index(index), entries);
@@ -205,10 +203,20 @@ mod tests {
         let paths: Vec<_> =
             document.entries().iter().map(|entry| entry.path().to_string()).collect();
 
-        assert_eq!(paths, ["database.port", "nodes[0]", "nodes[1]"]);
-        assert_eq!(document.entries()[0].value().kind(), ValueKind::Integer);
-        assert_eq!(document.entries()[1].value().kind(), ValueKind::Boolean);
-        assert_eq!(document.entries()[2].value().kind(), ValueKind::Null);
+        assert_eq!(paths, ["database", "database.port", "nodes", "nodes[0]", "nodes[1]"]);
+        let value_at = |path: &str| {
+            document
+                .entries()
+                .iter()
+                .find(|entry| entry.path().to_string() == path)
+                .unwrap()
+                .value()
+        };
+        assert_eq!(value_at("database").kind(), ValueKind::Object);
+        assert_eq!(value_at("database.port").kind(), ValueKind::Integer);
+        assert_eq!(value_at("nodes").kind(), ValueKind::Array);
+        assert_eq!(value_at("nodes[0]").kind(), ValueKind::Boolean);
+        assert_eq!(value_at("nodes[1]").kind(), ValueKind::Null);
     }
 
     #[test]
@@ -241,6 +249,40 @@ mod tests {
         assert!(entries.contains(&("object".to_owned(), ValueKind::Object)));
         assert!(entries.contains(&("array".to_owned(), ValueKind::Array)));
         assert!(entries.contains(&("items[0]".to_owned(), ValueKind::Object)));
+    }
+
+    #[test]
+    fn preserves_duplicate_nested_object_keys() {
+        let document =
+            parse_json(r#"{"database":{"host":"localhost"},"database":{"port":5432}}"#).unwrap();
+
+        let database_entries: Vec<_> = document
+            .entries()
+            .iter()
+            .filter(|entry| entry.path().to_string() == "database")
+            .collect();
+
+        assert_eq!(database_entries.len(), 2);
+        assert!(database_entries.iter().all(|entry| entry.value().kind() == ValueKind::Object));
+    }
+
+    #[test]
+    fn preserves_duplicate_array_keys() {
+        let document = parse_json(r#"{"items":[1],"items":[2,3]}"#).unwrap();
+
+        let array_entries: Vec<_> =
+            document.entries().iter().filter(|entry| entry.path().to_string() == "items").collect();
+
+        assert_eq!(array_entries.len(), 2);
+        assert!(array_entries.iter().all(|entry| entry.value().kind() == ValueKind::Array));
+    }
+
+    #[test]
+    fn requires_an_object_at_the_json_root() {
+        for input in ["[]", "null", "42", r#""value""#, "true"] {
+            assert!(parse_json(input).is_err(), "accepted root: {input}");
+        }
+        assert!(parse_json("{}").is_ok());
     }
 
     #[test]

@@ -1,30 +1,30 @@
 # EnvSentry
 
-A small Rust CLI for spotting configuration drift without dumping your secrets into the terminal. Because CI logs have enough problems already.
+EnvSentry is a Rust CLI for detecting configuration drift across dotenv, JSON and TOML files. It reports structural and value differences without including configuration values in its output.
 
-EnvSentry compares dotenv, JSON, and TOML files through one common model. It can check both values and structure, or just check that a target has the keys your schema expects.
+![EnvSentry CLI demonstration](demo/demo.gif)
 
-## Quick start
+## Usage
 
-Compare a checked-in example with the config you're actually using:
+Compare a target configuration against a reference:
 
 ```sh
 envsentry compare .env.example .env
 ```
 
-Check a target against a separate schema file, ignoring value differences:
+Check a configuration against a schema while ignoring value and type differences:
 
 ```sh
 envsentry check --schema config.schema.toml config.toml
 ```
 
-For CI, emit JSON:
+Emit machine-readable diagnostics for CI:
 
 ```sh
 envsentry compare reference.json target.json --format json
 ```
 
-Warnings are allowed by default. Make them fail the command with `--strict`:
+Treat warnings as policy failures:
 
 ```sh
 envsentry compare .env.example .env --strict --no-color
@@ -32,47 +32,53 @@ envsentry compare .env.example .env --strict --no-color
 
 ## Supported formats
 
-- **dotenv:** `.env`, `.env.*`, `.dotenv`, `.env` extension, and extensionless files
-- **JSON:** `.json`
-- **TOML:** `.toml`
+| Format | Detection | Behaviour |
+|---|---|---|
+| dotenv | `.env`, `.env.*`, `.dotenv`, `.env` extension and extensionless filenames | Parses assignments without modifying the process environment; preserves repeated assignments. |
+| JSON | `.json` | Requires an object root; preserves repeated object keys, including nested container keys. |
+| TOML | `.toml` | Preserves native value kinds; duplicate definitions are rejected by the TOML parser. |
 
-Nested objects, tables, and arrays are normalized into canonical paths. Duplicate dotenv assignments and JSON object keys are preserved so they can be diagnosed; TOML duplicate definitions are rejected by the TOML parser.
+Nested objects, tables and arrays are normalized into canonical paths. Container entries are retained alongside their descendants, preserving empty structures and repeated parent keys.
 
-## What gets reported
+## Diagnostics and exit codes
 
-EnvSentry reports diagnostic codes, severities, paths, and source filenames. Line and column fields are supported by the model, but the built-in parsers don't populate them.
+| Finding | Severity |
+|---|---|
+| Missing key | Error |
+| Duplicate key | Error |
+| Unexpected key | Warning |
+| Empty or whitespace-only value | Warning |
+| Value mismatch | Warning |
+| Type mismatch | Warning |
 
-Configuration values are never included in text or JSON reports. Parse errors are generic and value-free too. Control characters in displayed paths and filenames are escaped before text output.
+`--strict` makes warnings fail the command without changing their reported severity. The `check` command ignores value and type differences while retaining structural and empty-value findings.
 
-Missing and duplicate keys are errors. Unexpected keys, empty values, and value/type mismatches are warnings. `--strict` makes warnings fail the command. The `check` command ignores value and type differences, but still reports structural findings and empty values.
+| Exit code | Meaning |
+|---|---|
+| `0` | No finding violates the selected policy |
+| `1` | Errors exist, or warnings exist with `--strict` |
+| `2` | Invalid invocation, unsupported format, file I/O, parsing or report-writing failure |
 
-### Exit codes
-
-| Code | Meaning |
-| --- | --- |
-| `0` | No policy failure |
-| `1` | Findings violate the selected policy |
-| `2` | Invalid invocation, unsupported format, file I/O failure, or parsing failure |
-
+Reports contain diagnostic metadata and never include configuration values. See [Security](docs/security.md) for the report-handling boundary and sensitivity classification.
 
 ## Documentation
 
-- [Architecture](docs/architecture.md) — the crates, data flow, and common model
-- [Design decisions](docs/design-decisions.md) — why the project is shaped this way
+- [Architecture](docs/architecture.md) — crate responsibilities, data flow and configuration model
+- [Design decisions](docs/design-decisions.md) — comparison semantics and implementation choices
 - [Configuration formats](docs/configuration-formats.md) — parser behaviour and normalization
-- [Diagnostics](docs/diagnostics.md) — codes, severity, ordering, and source locations
-- [Security](docs/security.md) — what is and isn't exposed
-- [Development](docs/development.md) — toolchain, checks, and tests
+- [Diagnostics](docs/diagnostics.md) — diagnostic codes, severity, ordering and exit codes
+- [Security](docs/security.md) — secret handling and sensitivity classification
+- [Development](docs/development.md) — toolchain, quality checks and tests
 
 ## Development
 
-Use the Rust toolchain pinned in `rust-toolchain.toml`. Run the same formatting, lint, and test checks used by CI:
+Use the pinned toolchain and run the CI checks locally:
 
 ```sh
 ./scripts/check.sh
 ```
 
-Build the workspace or inspect the CLI help:
+Build the workspace or inspect CLI help:
 
 ```sh
 cargo build --workspace --locked

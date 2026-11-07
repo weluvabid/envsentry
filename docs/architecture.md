@@ -1,51 +1,48 @@
-# How EnvSentry is put together
+# Architecture
 
-EnvSentry is split into three Rust crates. That's not architecture astronaut stuff; each one has a job, and the boundaries keep the comparison engine from caring about file syntax or terminal output.
-
-## The three pieces
-
-- **`envsentry-core`** owns the common configuration model, comparison rules, diagnostics, and sensitivity metadata. It doesn't read files or print reports.
-- **`envsentry-parsers`** turns dotenv, JSON, and TOML input into the core model. Each parser deals with its format's quirks, then hands over the same shape of data.
-- **`envsentry-cli`** handles arguments, file loading, format detection, output, and process exit codes.
-
-The flow is:
+EnvSentry is a Rust workspace with three crates and a one-way dependency flow.
 
 ```text
-input files
-    |
-    v
-CLI: read files + identify format
-    |
-    v
-Parsers: format-specific input -> ConfigDocument
-    |
-    v
-Core: compare canonical paths -> diagnostics
-    |
-    v
-CLI: text or JSON report -> exit code
+envsentry-cli
+  ├── envsentry-parsers
+  │     └── envsentry-core
+  └── envsentry-core
 ```
 
-## The common model
+## Crate responsibilities
 
-A `ConfigDocument` contains a format, an optional source name, and a list of `ConfigEntry` values. Each entry has:
+- **`envsentry-core`** defines configuration paths, typed values, documents, comparison options, diagnostics and sensitivity classification. It does not perform file I/O or render output.
+- **`envsentry-parsers`** parses dotenv, JSON and TOML into the shared core model. Format-specific syntax and duplicate handling remain in this crate.
+- **`envsentry-cli`** parses arguments, reads files, selects parsers, renders text or JSON and maps findings to process exit codes.
+
+## Data flow
+
+1. The CLI reads each input as UTF-8 text.
+2. The input filename selects a parser.
+3. The parser creates a `ConfigDocument` containing ordered `ConfigEntry` values.
+4. The core indexes entries by `ConfigPath` and compares the reference against the target.
+5. The CLI renders diagnostics without configuration values and selects an exit code.
+
+## Configuration model
+
+A `ConfigDocument` contains a format, an optional source name and a vector of entries. Each entry contains:
 
 - a canonical `ConfigPath`;
 - a `ConfigValue` and its `ValueKind`;
 - sensitivity metadata;
 - an optional source location;
-- an occurrence number, so repeated dotenv assignments don't vanish.
+- an occurrence number.
 
-Nested objects and arrays are flattened into paths such as `database.port` and `nodes[0]`. Keys containing dots, brackets, backslashes, or control characters are escaped when rendered. That keeps a literal key like `items[0]` distinct from the first element of an `items` array.
+Objects and arrays are represented by entries at their own paths as well as entries for their descendants. This preserves container type and makes repeated container keys observable. Array elements use indexed path segments.
 
-Values stay in the model because comparisons need them. Their `Debug` representation is redacted, and diagnostics deliberately carry metadata rather than the values themselves.
+Path rendering escapes dots, brackets, backslashes and control characters in literal keys. This keeps literal keys distinct from structural path separators and array indexes.
 
-## Comparison
+## Comparison model
 
-The core builds ordered indexes keyed by `ConfigPath`, then checks for missing, unexpected, and duplicate entries. When value comparison is enabled, it also checks value kinds and contents. Empty values are checked independently, including on duplicated or otherwise unmatched entries.
+The core builds `BTreeMap` indexes keyed by `ConfigPath`. It reports missing paths, unexpected paths and repeated entries. For paths occurring exactly once in both documents, value comparison checks the value kind first and then the stored textual representation. Empty and whitespace-only values are evaluated independently.
 
-The ordered map and final diagnostic sort make output stable. Same inputs, same findings, same order. CI logs appreciate boring consistency.
+Diagnostics are sorted by path, code, severity, source name and location. The same documents and options therefore produce the same diagnostic order.
 
-## A note on metadata
+## Boundaries
 
-The model supports sensitivity classifications and source locations. The CLI does not use sensitivity classifications to change reporting, and the built-in parsers do not populate line and column locations. Those boundaries are described in [Security](security.md) and [Diagnostics](diagnostics.md); they are model capabilities, not automatic behaviour.
+The current CLI is synchronous and loads complete files into memory. Built-in parsers do not attach line and column locations. Sensitivity classification is available in the core API but does not alter CLI reports; all reports omit configuration values.

@@ -1,33 +1,27 @@
-# Security and secret handling
+# Security model
 
-EnvSentry is built around a simple rule: finding configuration drift shouldn't mean copying configuration values into logs.
+EnvSentry compares configuration values while keeping those values out of its reports.
 
-## What reports contain
+## Report contents
 
-Text and JSON reports include diagnostic metadata:
+Text and JSON reports contain diagnostic codes, severities, canonical paths, source filenames and optional source coordinates. They do not contain old values, new values or value previews.
 
-- diagnostic code and severity;
-- canonical configuration path;
-- source filename, when known;
-- line and column, when supplied by the caller.
+Parser errors use generic messages and do not include parser-provided input excerpts. `ConfigValue` redacts its raw field in `Debug` output.
 
-They do **not** include the old value, the new value, or a preview of either. Parse errors are generic too, so malformed input doesn't get echoed back with a secret attached.
+The CLI escapes control characters in displayed paths and filenames. JSON reports are serialized through Serde.
 
-`ConfigValue` stores the raw value because comparisons need it. Its `Debug` implementation prints `[REDACTED]` instead of the contents. This is useful protection against accidental debug logging, but it isn't a substitute for being careful with values elsewhere in an application.
+## Sensitivity classification
 
-## Sensitivity metadata
+The core exposes `Sensitivity` and `SensitivityPolicy`.
 
-The core exposes a `Sensitivity` enum and `SensitivityPolicy`. The default policy recognises common names such as `PASSWORD`, `SECRET`, `TOKEN`, `API_KEY`, `DATABASE_URL`, and `PRIVATE_KEY`. Callers can add sensitive or public wildcard patterns, and explicit entry classifications are respected.
+The default policy recognizes common names including `PASSWORD`, `SECRET`, `TOKEN`, `API_KEY`, `DATABASE_URL` and `PRIVATE_KEY`. Matching is case-insensitive. Custom patterns support `*` as a wildcard. Public patterns take precedence over sensitive patterns when classifying a path. An explicit `Sensitive` or `Public` entry classification takes precedence over path-based classification; `Unknown` entries are classified by path.
 
-This is a classification API. The built-in parsers mark entries as `Unknown`, and the CLI does not apply the policy when producing reports. Classification therefore does not change CLI output: reports omit configuration values for every entry.
+Array indexes are omitted when constructing the dotted key used for classification, so a field such as `services[0].api_token` is classified using `SERVICES.API_TOKEN`.
 
-If a real use case emerges for displaying non-sensitive values, configurable redaction could be added as a separate reporting option. The current behaviour remains simple: reports never include configuration values.
+The built-in parsers mark entries `Unknown`, and the CLI does not currently use classification to control output. All configuration values are omitted from reports regardless of classification.
 
-## Practical boundaries
+## Data handling
 
-- Paths and source filenames can originate in input or command-line arguments. The CLI escapes control characters in text output to avoid terminal-control surprises.
-- JSON output is serialized as JSON rather than assembled by string concatenation.
-- File contents are read into memory for parsing and comparison. Avoid pointing EnvSentry at untrusted, enormous files in environments where memory use needs a hard limit.
-- Value-free diagnostics reduce accidental disclosure, but they don't protect the input files themselves, process memory, shell history, or other tools that may handle those files.
+The CLI reads complete input files into memory and parses them in-process. Raw values therefore exist in process memory while comparison runs. EnvSentry does not modify the process environment when parsing dotenv input.
 
-In short: EnvSentry keeps values out of its reports. It doesn't claim to be a secret manager or a sandbox.
+Value-free reports prevent configuration values from being copied into normal diagnostic output. Input files, process memory, shell history and other tools that handle the files remain outside this report-handling boundary.

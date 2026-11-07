@@ -1,39 +1,49 @@
-# Design decisions (and a few reasons)
+# Design decisions
 
-This is the short version of why EnvSentry is shaped the way it is. Not every choice needs a 20-page ADR; some just need a clear explanation and a place to point curious people.
+This document records the decisions that define EnvSentry's behaviour and public contract.
 
-## One canonical model for every format
+## One canonical model
 
-Dotenv, JSON, and TOML have different syntax and different type systems. The comparison engine shouldn't need three separate implementations to understand them.
+Each parser converts format-specific input into `ConfigDocument`, `ConfigEntry`, `ConfigPath` and `ConfigValue`. The comparison engine operates only on this model. Parser changes do not require format-specific comparison logic.
 
-Each parser normalizes input into `ConfigDocument` and `ConfigEntry`. The core compares paths and values without knowing which parser produced them.
+## Preserve duplicate entries
 
-## Preserve duplicates instead of silently picking a winner
+Entries are stored in a vector rather than a map so repeated assignments and object members remain observable. The comparison engine groups entries by canonical path and emits a `DUPLICATE_KEY` diagnostic for each occurrence after the first.
 
-A normal map would overwrite repeated keys. That's particularly unhelpful for dotenv and JSON, where duplicate assignments/object keys can otherwise disappear during parsing.
+JSON object and array containers are represented explicitly at their paths. This is necessary to detect repeated parent keys even when their values contain nested structures. TOML rejects duplicate definitions during parsing.
 
-The model stores entries in a vector and tracks occurrence counts. The comparison layer can then report duplicates instead of pretending the input was unambiguous. TOML's parser rejects duplicate definitions as invalid TOML.
+## Represent container structure
+
+Objects and arrays produce entries at their own paths in addition to their descendants. This preserves empty containers and distinguishes an object or array from a scalar at the same path. Array elements use numeric path segments.
+
+JSON roots are restricted to objects. This aligns JSON with the named-key configuration model used by dotenv and TOML.
+
+## Compare typed values
+
+When value comparison is enabled, the engine first compares `ValueKind`. Values of the same kind are compared using their stored string representation. EnvSentry does not perform semantic normalization such as treating differently formatted numeric strings as equivalent.
 
 ## Keep values out of diagnostics
 
-The engine needs raw values to compare configurations, but users don't need secrets copied into CI logs to learn that two values differ.
+`ConfigValue` retains raw data for comparison, but its `Debug` implementation redacts the raw field. Diagnostics contain codes, severity, paths, source names and optional locations; they never contain compared values. Text and JSON CLI renderers follow the same rule.
 
-Diagnostics contain a code, severity, path, source name, and optional location. They don't contain the compared values. `ConfigValue` also redacts its `Debug` output as a second line of defence.
+## Deterministic results
 
-## Stable output is a feature
+The comparison engine indexes paths with `BTreeMap` and sorts diagnostics by path, code, severity, source name and location. This provides stable text output, JSON output and test results.
 
-Indexes use `BTreeMap`, and reports are sorted before they leave the core. This makes text and JSON output deterministic, which is useful for CI, snapshots, and humans trying to diff two runs.
+## Separate parsing, comparison and presentation
 
-## Keep parsing out of the core
+The core has no filesystem or terminal dependencies. Parsers own syntax handling. The CLI owns file loading, format detection, report serialization and process exit codes.
 
-The core doesn't open files, inspect extensions, or print to stdout. That makes the comparison logic easier to test and leaves room for other front ends without dragging CLI concerns into the library.
+## Policy and exit codes
 
-## Sensitivity is classification metadata
+Missing and duplicate keys are errors. Unexpected keys, empty values and value/type mismatches are warnings. Warnings do not fail a normal invocation; `--strict` makes them fail without changing their reported severity.
 
-The core exposes `SensitivityPolicy` and per-entry `Sensitivity` metadata. The policy can classify paths and entries, but the built-in parser/CLI flow does not use those classifications when producing reports.
+The `check` command disables value comparison but retains structural diagnostics and empty-value checks.
 
-Reports omit configuration values for every entry, regardless of sensitivity. The classification API is available to callers, but it does not control CLI output. If EnvSentry gains a real use case for showing non-sensitive values, configurable redaction could be added to the reporting layer. See [Security](security.md).
+## Sensitivity classification
 
-## Locations are optional
+`SensitivityPolicy` is a core-library classification facility. Public patterns are checked before sensitive patterns; explicit entry classifications are used when an entry is classified. The CLI currently omits all values regardless of classification, so classification does not change report contents.
 
-`ConfigEntry` can carry a `SourceLocation`, and diagnostics preserve it when one is present. The built-in parsers don't attach locations, so normal CLI reports include the source filename but not line and column numbers. See [Diagnostics](diagnostics.md).
+## Source locations
+
+The model supports one-based line and column coordinates. Built-in parsers currently leave these coordinates unset, so CLI diagnostics identify the source file but do not include line and column.

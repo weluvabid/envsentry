@@ -27,22 +27,16 @@ pub fn parse_toml(input: &str) -> Result<ConfigDocument, TomlParseError> {
 fn flatten(value: toml::Value, path: &ConfigPath, entries: &mut Vec<ConfigEntry>) {
     match value {
         toml::Value::Table(table) => {
-            if table.is_empty() {
-                if !path.is_root() {
-                    push_value(path, "{}", ValueKind::Object, entries);
-                }
-                return;
+            if !path.is_root() {
+                push_value(path, "{}", ValueKind::Object, entries);
             }
             for (key, value) in table {
                 flatten(value, &path.child_key(key), entries);
             }
         }
         toml::Value::Array(values) => {
-            if values.is_empty() {
-                if !path.is_root() {
-                    push_value(path, "[]", ValueKind::Array, entries);
-                }
-                return;
+            if !path.is_root() {
+                push_value(path, "[]", ValueKind::Array, entries);
             }
             for (index, value) in values.into_iter().enumerate() {
                 flatten(value, &path.child_index(index), entries);

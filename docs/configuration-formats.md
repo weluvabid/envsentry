@@ -1,18 +1,31 @@
 # Configuration formats
 
-All supported formats are normalized into the same flattened path model before comparison.
+EnvSentry supports dotenv, JSON and TOML. Each parser converts its input into the same flattened `ConfigDocument` model.
+
+## Format selection
+
+The CLI selects a parser from the filename:
+
+| Input | Parser |
+|---|---|
+| `.env`, `.env.*`, `.dotenv`, `.env` extension | dotenv |
+| `.json` | JSON |
+| `.toml` | TOML |
+| Extensionless filename | dotenv |
+
+Extensions are case-insensitive. Format detection does not inspect file contents. Other extensions are rejected.
 
 ## dotenv
 
-Recognised filenames include `.env`, `.env.*`, `.dotenv`, files with the `.env` extension, and extensionless files.
+Parsing uses `dotenvy` through its iterator API. Values are parsed without mutating the current process environment.
 
-Parsing is delegated to `dotenvy`. EnvSentry consumes the parser iterator directly rather than loading values into the current process environment. Repeated assignments are retained as repeated entries and can be reported as duplicates.
-
-Dotenv values are strings. An empty assignment (`NAME=`) is retained and reported as an empty value.
+Each assignment becomes a string entry. Repeated assignments remain separate entries and are reported as duplicates. Empty and whitespace-only values are retained for diagnostics.
 
 ## JSON
 
-Files ending in `.json` are parsed with Serde. Objects and arrays become canonical paths:
+JSON input must have an object at its root. Nested objects and arrays are flattened into canonical paths.
+
+For example:
 
 ```json
 {
@@ -21,18 +34,18 @@ Files ending in `.json` are parsed with Serde. Objects and arrays become canonic
 }
 ```
 
-becomes paths like `database.port`, `nodes[0]`, and `nodes[1]`.
+produces entries for `database`, `database.port`, `nodes`, `nodes[0]` and `nodes[1]`. Container entries preserve object and array types, including empty containers.
 
-Duplicate object keys are preserved by the custom deserializer so EnvSentry can report them. Empty nested objects and arrays are also retained instead of disappearing during flattening. JSON strings, numbers, booleans, and null keep distinct value kinds.
+The custom Serde visitor stores object members as a sequence rather than a map. Repeated keys therefore survive parsing, including repeated keys whose values are nested objects or arrays.
+
+JSON strings, numbers, booleans and null retain distinct value kinds. Integer and floating-point values retain the textual representation produced by the parser.
 
 ## TOML
 
-Files ending in `.toml` are parsed with `toml`. Tables and arrays are flattened in the same way as JSON, and TOML-native value kinds (including datetimes) are retained.
+TOML tables and arrays use the same container-entry and indexed-path representation as JSON. TOML-native values retain their kinds, including datetimes.
 
-The TOML parser rejects duplicate definitions as invalid TOML. Unlike dotenv and JSON, those duplicates don't reach the comparison engine as repeated entries.
+The TOML parser rejects duplicate definitions as invalid TOML. Those inputs fail parsing rather than producing comparison diagnostics.
 
-## Format detection
+## Root model
 
-The CLI chooses a parser from the filename extension and special dotenv filename patterns. Detection is case-insensitive for extensions. YAML and other formats are not supported.
-
-The parsers return generic, value-free errors. The CLI adds the source filename when reporting a parse failure.
+JSON documents must be objects at the root. Root arrays and scalar values are rejected because EnvSentry models configuration as named paths. TOML documents naturally provide a root table. Dotenv documents consist of named assignments.
